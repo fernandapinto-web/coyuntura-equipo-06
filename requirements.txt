@@ -1,0 +1,11 @@
+pandas
+numpy
+requests
+python-dotenv
+statsmodels
+scikit-learn
+matplotlib
+seaborn
+jupyter
+bcchapi
+fredapi
