@@ -35,16 +35,20 @@ FRED_API_KEY = os.getenv("FRED_API_KEY", "")
 # ============================================================
 SERIES_BCCH = [
     # (codigo, nombre, frecuencia, unidad, id_tema)
+    ("F074.IPC.IND.Z.EP09.C.M", "IPC (índice)", "M", "índice", 2),
     ("F073.TCO.PRE.Z.D", "Tipo de cambio observado (CLP/USD)", "D", "CLP/USD", 5),
     ("F022.TPM.TIN.D001.NO.Z.D", "Tasa de Política Monetaria (TPM)", "D", "% anual", 4),
-    ("F074.IPC.VAR.Z.Z.C.M", "IPC, variación mensual", "M", "var. % mensual", 2),
     ("F032.IMC.IND.Z.Z.EP18.Z.Z.0.M", "Imacec (índice)", "M", "índice 2018=100", 1),
-    # Agreguen aquí el resto de sus series...
+    ("F049.DES.TAS.INE9.10.M", "Tasa de desocupación", "M", "%", 3),
+    ("G049.RMM.V12.INE23.NE.M", "Índice de remuneraciones (var. anual)", "M", "var. % anual", 3),
+    ("F019.PPB.PRE.41B.M", "Petróleo WTI", "M", "USD/barril", 5),
+    ("F019.PPB.PRE.100.D", "Cobre refinado BML", "D", "USD cent./libra", 5),
 ]
 
 SERIES_FRED = [
     # (codigo, nombre, frecuencia, unidad, id_tema)
     ("CPIAUCSL", "IPC Estados Unidos (índice)", "M", "índice", 6),
     ("FEDFUNDS", "Tasa Fed Funds (EE.UU.)", "M", "% anual", 6),
-    # Agreguen aquí el resto de sus series...
+    ("PPIACO", "Índice de precios al productor (EE.UU.)", "M", "índice", 6),
+    ("PFOODINDEXM", "Índice mundial de precios de alimentos", "M", "índice", 5),
 ]
