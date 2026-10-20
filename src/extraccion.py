@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import sys
 from datetime import date
+from urllib.parse import quote, quote_plus
 
 import numpy as np
 import pandas as pd
@@ -45,12 +46,17 @@ def enmascarar(texto: str) -> str:
     """
     for secreto in (config.FRED_API_KEY, config.BCCH_PASSWORD, config.BCCH_USUARIO):
         if secreto:
-            texto = texto.replace(secreto, "***")
+            # requests muestra los parámetros dentro de la URL preparada. Allí
+            # caracteres como '@' pueden aparecer codificados (%40), por lo que
+            # reemplazar solo el texto original no basta para ocultar el dato.
+            variantes = {secreto, quote(secreto, safe=""), quote_plus(secreto)}
+            for variante in variantes:
+                texto = texto.replace(variante, "***")
     return texto
 
 
 def pedir_json(url: str, params: dict) -> dict:
-    """Hace la petición HTTP y devuelve el JSON, sin filtrar credenciales al fallar."""
+    """Hace la petición HTTP y devuelve JSON sin exponer credenciales al fallar."""
     try:
         r = requests.get(url, params=params, timeout=60)
         r.raise_for_status()
@@ -88,7 +94,8 @@ def extraer_serie_bcch(codigo: str, desde: str = "2010-01-01", hasta: str | None
     # La API entrega fechas dd-mm-YYYY y valores como texto; 'NaN' indica dato faltante
     df["fecha"] = pd.to_datetime(df["indexDateString"], format="%d-%m-%Y")
     df["valor"] = pd.to_numeric(df["value"], errors="coerce")
-    return df[["fecha", "valor"]].dropna().reset_index(drop=True)
+    # Los faltantes se conservan para poder auditarlos y cargarlos como NULL.
+    return df[["fecha", "valor"]].sort_values("fecha").reset_index(drop=True)
 
 
 # ------------------------------------------------------------
@@ -114,7 +121,7 @@ def extraer_serie_fred(codigo: str, desde: str = "2010-01-01", hasta: str | None
     df = pd.DataFrame(obs)
     df["fecha"] = pd.to_datetime(df["date"])
     df["valor"] = pd.to_numeric(df["value"], errors="coerce")  # '.' indica dato faltante en FRED
-    return df[["fecha", "valor"]].dropna().reset_index(drop=True)
+    return df[["fecha", "valor"]].sort_values("fecha").reset_index(drop=True)
 
 
 # ------------------------------------------------------------
@@ -150,7 +157,10 @@ def generar_serie_demo(
 # Orquestación
 # ------------------------------------------------------------
 def extraer_todo(
-    demo: bool = False, desde: str = "2010-01-01", hasta: str | None = None
+    demo: bool = False,
+    desde: str = "2010-01-01",
+    hasta: str | None = None,
+    exigir_todas: bool = True,
 ) -> dict[str, pd.DataFrame]:
     """Extrae todas las series del catálogo definido en config.py.
 
@@ -164,9 +174,10 @@ def extraer_todo(
 
     Devuelve un diccionario {codigo: DataFrame(fecha, valor)}.
 
-    Nota: si una serie falla, se informa y se continúa con las demás. El
-    proceso termina sin error aunque falten series, así que revisen la
-    salida y cuenten los [OK].
+    Por defecto, si una serie falla se revisan las restantes para entregar un
+    diagnóstico completo y luego se detiene el proceso. Así se evita construir
+    silenciosamente una base parcial. `exigir_todas=False` queda disponible
+    solo para diagnósticos explícitos.
     """
     resultados: dict[str, pd.DataFrame] = {}
     catalogo = config.SERIES_BCCH + config.SERIES_FRED
@@ -180,9 +191,17 @@ def extraer_todo(
                 df = extraer_serie_bcch(codigo, desde=desde, hasta=hasta)
             else:
                 df = extraer_serie_fred(codigo, desde=desde, hasta=hasta)
+            if df.empty or not df["valor"].notna().any():
+                raise ValueError("La serie no contiene observaciones válidas.")
+            if df["fecha"].duplicated().any():
+                raise ValueError("La serie contiene fechas duplicadas.")
             resultados[codigo] = df
             ultima = df["fecha"].max().date() if len(df) else "sin datos"
-            print(f"  [OK] {nombre}: {len(df)} observaciones, hasta {ultima}")
+            faltantes = int(df["valor"].isna().sum())
+            print(
+                f"  [OK] {nombre}: {len(df)} observaciones, "
+                f"{faltantes} faltantes, hasta {ultima}"
+            )
         except Exception as e:  # noqa: BLE001 - queremos continuar con las demás series
             fallidas.append(nombre)
             print(f"  [ERROR] {nombre} ({codigo}): {enmascarar(str(e))}")
@@ -190,6 +209,11 @@ def extraer_todo(
     if fallidas:
         print(f"\n  ATENCION: {len(fallidas)} de {len(catalogo)} series fallaron: "
               f"{', '.join(fallidas)}")
+        if exigir_todas:
+            raise RuntimeError(
+                f"Extracción incompleta: fallaron {len(fallidas)} de "
+                f"{len(catalogo)} series. No se cargará una base parcial."
+            )
     return resultados
 
 

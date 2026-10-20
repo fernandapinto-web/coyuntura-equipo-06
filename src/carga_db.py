@@ -42,7 +42,7 @@ def crear_esquema(engine) -> None:
 
 
 def cargar_catalogo(engine) -> None:
-    """Inserta el catálogo de series definido en config.py."""
+    """Sincroniza la tabla `series` con el catálogo definido en config.py."""
     catalogo = config.SERIES_BCCH + config.SERIES_FRED
     fuentes = ["BCCH"] * len(config.SERIES_BCCH) + ["FRED"] * len(config.SERIES_FRED)
     df = pd.DataFrame(
@@ -52,6 +52,17 @@ def cargar_catalogo(engine) -> None:
         ]
     )
     with engine.begin() as conn:
+        ids_catalogo = set(df["id_serie"])
+        ids_existentes = set(conn.execute(text("SELECT id_serie FROM series")).scalars())
+        for id_obsoleto in sorted(ids_existentes - ids_catalogo):
+            conn.execute(
+                text("DELETE FROM observaciones WHERE id_serie = :id_serie"),
+                {"id_serie": id_obsoleto},
+            )
+            conn.execute(
+                text("DELETE FROM series WHERE id_serie = :id_serie"),
+                {"id_serie": id_obsoleto},
+            )
         for _, fila in df.iterrows():
             conn.execute(
                 text(
@@ -64,33 +75,46 @@ def cargar_catalogo(engine) -> None:
 
 
 def cargar_observaciones(engine, series: dict[str, pd.DataFrame]) -> None:
-    """Inserta/actualiza las observaciones de cada serie (idempotente)."""
+    """Reemplaza las observaciones de las series extraídas (transacción atómica)."""
     total = 0
     with engine.begin() as conn:
         for codigo, df in series.items():
+            # Borra la versión anterior de la serie para no dejar observaciones
+            # obsoletas si cambia la fecha de corte o la fuente revisa sus datos.
+            conn.execute(
+                text("DELETE FROM observaciones WHERE id_serie = :id_serie"),
+                {"id_serie": codigo},
+            )
             registros = [
-                {"id_serie": codigo, "fecha": fila.fecha.date().isoformat(), "valor": float(fila.valor)}
+                {
+                    "id_serie": codigo,
+                    "fecha": fila.fecha.date().isoformat(),
+                    "valor": None if pd.isna(fila.valor) else float(fila.valor),
+                }
                 for fila in df.itertuples()
             ]
-            conn.execute(
-                text(
-                    "INSERT OR REPLACE INTO observaciones (id_serie, fecha, valor) "
-                    "VALUES (:id_serie, :fecha, :valor)"
-                ),
-                registros,
-            )
+            if registros:
+                conn.execute(
+                    text(
+                        "INSERT OR REPLACE INTO observaciones (id_serie, fecha, valor) "
+                        "VALUES (:id_serie, :fecha, :valor)"
+                    ),
+                    registros,
+                )
             total += len(registros)
     print(f"[OK] Observaciones cargadas/actualizadas: {total}.")
 
 
 def main(demo: bool = False, desde: str = "2010-01-01", hasta: str | None = None) -> None:
-    engine = obtener_engine()
-    crear_esquema(engine)
-    cargar_catalogo(engine)
     modo = "DEMO (datos sintéticos)" if demo else "APIs oficiales"
     corte = hasta or "hoy"
     print(f"Extrayendo series | modo: {modo} | desde {desde} hasta {corte}")
-    series = extraer_todo(demo=demo, desde=desde, hasta=hasta)
+    # Primero se exige una extracción completa. La base existente permanece
+    # intacta si falla cualquier API o código de serie.
+    series = extraer_todo(demo=demo, desde=desde, hasta=hasta, exigir_todas=True)
+    engine = obtener_engine()
+    crear_esquema(engine)
+    cargar_catalogo(engine)
     cargar_observaciones(engine, series)
     print(f"Base de datos lista en: {config.RUTA_DB}")
 

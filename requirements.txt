@@ -1,6 +1,7 @@
 pandas
 numpy
 requests
+urllib3<2
 python-dotenv
 statsmodels
 scikit-learn

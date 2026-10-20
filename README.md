@@ -55,12 +55,18 @@ coyuntura-equipo-06/
     config.py          catálogo de las 12 series y lectura de claves
     extraccion.py      descarga desde las APIs del Banco Central y FRED
     carga_db.py        crea la base de datos y carga las series
+    validar_db.py      audita cobertura, faltantes e integridad de SQLite
   sql/
     01_esquema.sql     tablas: series, temas, observaciones
     02_consultas_ejemplo.sql
+    03_join_groupby.sql
+    04_series_jorge.sql
+    05_analisis_inflacion_chile.sql
   notebooks/
     01_pipeline_datos.ipynb
     02_analisis_ejemplo.ipynb
+    03_analisis_coyuntura.ipynb
+    04_analisis_inflacion_chile.ipynb
   data/
     coyuntura.db       se genera con el script (no se sube a GitHub)
 ```
@@ -69,12 +75,9 @@ El pipeline de extracción y carga está adaptado del kit de inicio del curso. E
 
 ## Series utilizadas
 
-### formato de la tabla
 | Variable | Código | Frecuencia | Fuente |
-
 |---|---|---|---|
-
-| IPC (índice) | F074.IPC.IND.Z.EP09.C.M | Mensual | BCCh |
+| IPC Chile (índice 2023=100, serie empalmada) | F074.IPC.IND.Z.EP23.C.M | Mensual | BCCh |
 | Tipo de cambio observado | F073.TCO.PRE.Z.D | Diaria | BCCh |
 | Tasa de Política Monetaria (TPM) | F022.TPM.TIN.D001.NO.Z.D | Diaria | BCCh |
 | Imacec | F032.IMC.IND.Z.Z.EP18.Z.Z.0.M | Mensual | BCCh |
@@ -99,7 +102,9 @@ El pipeline de extracción y carga está adaptado del kit de inicio del curso. E
 2. Instalar las librerías :
 
    ```
-    pip install -r requirements.txt
+   python3 -m venv .venv
+   source .venv/bin/activate
+   python -m pip install -r requirements.txt
    ```
 
 3. Crear el archivo .env con las claves personales de acceso a las APIs. Se copia el archivo .env.example, se le cambia el nombre a .env y se escriben las claves propias. Las claves son gratuitas:
@@ -111,10 +116,65 @@ El .env no se sube a GitHub.
 
 4. Descargar las series y generar la base de datos, fijando la fecha de corte:
 
-```
-python src/carga_db.py --hasta 2026-10-20
+   ```
+   python src/carga_db.py --hasta 2026-10-20
    ```
 
-Esto descarga las 12 series y crea el archivo data/coyuntura.db. Se puede volver a correr cuando se quieran actualizar los datos.
+Esto descarga las 12 series desde las APIs oficiales y crea el archivo
+`data/coyuntura.db`. La carga exige que las 12 descargas terminen correctamente:
+si una falla, no reemplaza silenciosamente la base con una versión parcial. Los
+valores no observados se conservan como `NULL` para poder auditarlos. No usar
+`--demo` para resultados del informe.
 
-5. Correr el análisis. Abrir notebooks/03_analisis_coyuntura.ipynb y ejecutar todas las celdas. El notebook lee las consultas de la carpeta sql/ y trabaja sobre data/coyuntura.db.
+5. Auditar la base generada:
+
+   ```
+   python src/validar_db.py
+   ```
+
+   El control verifica las tablas `temas`, `series` y `observaciones`, las 12
+   series esperadas, cobertura temporal, faltantes, regularidad de frecuencia,
+   duplicados y observaciones sin serie asociada.
+
+6. Ejecutar los análisis:
+
+   - `notebooks/03_analisis_coyuntura.ipynb` conserva el análisis elaborado por
+     Jorge con `sql/04_series_jorge.sql`.
+   - `notebooks/04_analisis_inflacion_chile.ipynb` usa
+     `sql/05_analisis_inflacion_chile.sql` para analizar IPC, TPM, Imacec y tipo
+     de cambio. El notebook calcula la inflación interanual, mensualiza las
+     series diarias, audita faltantes y compara pronósticos directos a 12 meses
+     con un backtest de origen móvil.
+
+## Consultas SQL verificadas
+
+- `sql/02_consultas_ejemplo.sql`: `INNER JOIN`, `GROUP BY`, `LAG` y promedio
+  móvil con ventana.
+- `sql/03_join_groupby.sql`: consolidación del catálogo y agregación mensual de
+  series diarias.
+- `sql/04_series_jorge.sql`: selección con `INNER JOIN` y `WHERE` de las series
+  asignadas a Jorge.
+- `sql/05_analisis_inflacion_chile.sql`: base mensual del análisis principal;
+  combina `SELECT`, `WHERE`, `INNER JOIN`, `LEFT JOIN`, `GROUP BY`, `AVG` y
+  `LAG(12)`.
+
+## Resultado de la ejecución reproducible
+
+Con corte solicitado al **20 de octubre de 2026**, el pipeline real descargó
+las 12 series y almacenó 19.199 filas. La auditoría encontró 5.537 valores
+`NULL`, concentrados principalmente en fines de semana y feriados de las series
+diarias, sin duplicados ni observaciones huérfanas. Las fechas finales difieren
+entre series debido a sus calendarios de publicación.
+
+En el backtest preliminar de 36 pronósticos, el modelo Ridge basado solo en la
+historia de la inflación obtuvo RMSE 2,716 y MAE 2,077. El modelo ampliado con
+TPM, Imacec y tipo de cambio rezagados obtuvo RMSE 5,465 y MAE 4,310; por tanto,
+esa especificación macroeconómica no mejora al benchmark histórico. Este
+resultado usa datos revisados y no constituye evidencia causal ni una selección
+definitiva de modelo. Al seleccionar entre ambos modelos por el menor RMSE, la
+especificación de solo inflación proyecta **4,67 % interanual para septiembre de
+2027**, usando información hasta septiembre de 2026. Es una proyección
+condicional y no incorpora shocks futuros.
+
+La base SQLite y `.env` están excluidos de Git. Antes de preparar un commit se
+debe revisar que ningún archivo versionado contenga credenciales.

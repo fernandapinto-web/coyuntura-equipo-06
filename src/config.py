@@ -35,7 +35,7 @@ FRED_API_KEY = os.getenv("FRED_API_KEY", "")
 # ============================================================
 SERIES_BCCH = [
     # (codigo, nombre, frecuencia, unidad, id_tema)
-    ("F074.IPC.IND.Z.EP09.C.M", "IPC (índice)", "M", "índice", 2),
+    ("F074.IPC.IND.Z.EP23.C.M", "IPC Chile (índice)", "M", "índice 2023=100", 2),
     ("F073.TCO.PRE.Z.D", "Tipo de cambio observado (CLP/USD)", "D", "CLP/USD", 5),
     ("F022.TPM.TIN.D001.NO.Z.D", "Tasa de Política Monetaria (TPM)", "D", "% anual", 4),
     ("F032.IMC.IND.Z.Z.EP18.Z.Z.0.M", "Imacec (índice)", "M", "índice 2018=100", 1),
