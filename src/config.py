@@ -42,7 +42,7 @@ SERIES_BCCH = [
     ("F049.DES.TAS.INE9.10.M", "Tasa de desocupación", "M", "%", 3),
     ("G049.RMM.V12.INE23.NE.M", "Índice de remuneraciones (var. anual)", "M", "var. % anual", 3),
     ("F019.PPB.PRE.41B.M", "Petróleo WTI", "M", "USD/barril", 5),
-    ("F019.PPB.PRE.100.D", "Cobre refinado BML", "D", "USD cent./libra", 5),
+    ("F019.PPB.PRE.100.D", "Cobre refinado BML", "D", "USD/libra", 5),
 ]
 
 SERIES_FRED = [
