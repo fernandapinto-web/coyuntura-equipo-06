@@ -109,10 +109,12 @@ FRED: https://fred.stlouisfed.org/docs/api/api_key.html
 
 El .env no se sube a GitHub.
 
-4. Descargar las series y generar la base de datos:
+4. Descargar las series y generar la base de datos, fijando la fecha de corte:
 
-   ```
-     python -c "import sys; sys.path.append('src'); import carga_db; carga_db.main(demo=False)"
+```
+python src/carga_db.py --hasta 2026-10-20
    ```
 
 Esto descarga las 12 series y crea el archivo data/coyuntura.db. Se puede volver a correr cuando se quieran actualizar los datos.
+
+5. Correr el análisis. Abrir notebooks/03_analisis_coyuntura.ipynb y ejecutar todas las celdas. El notebook lee las consultas de la carpeta sql/ y trabaja sobre data/coyuntura.db.
