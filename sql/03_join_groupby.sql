@@ -7,14 +7,14 @@
 -- Consulta 1 (JOIN): uno las tablas observaciones, series y temas
 -- para ver la historia completa de mis series con su nombre, tema y unidad.
 -- ------------------------------------------------------------
+-- ------------------------------------------------------------
+-- Consulta 1 (JOIN): uno las tablas observaciones, series y temas
+-- para ver los datos de todas las series con su nombre, tema y unidad.
+-- ------------------------------------------------------------
 SELECT s.nombre, t.tema, o.fecha, o.valor, s.unidad
 FROM observaciones o
 JOIN series s ON s.id_serie = o.id_serie
 JOIN temas t ON t.id_tema = s.id_tema
-WHERE s.nombre IN ('Tasa de desocupación',
-                   'Índice de remuneraciones (var. anual)',
-                   'IPC Estados Unidos (índice)',
-                   'Índice de precios al productor (EE.UU.)')
 ORDER BY s.nombre, o.fecha;
 
 
